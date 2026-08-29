@@ -7,7 +7,7 @@ app = FastAPI(title="PO Assistant API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # tighten this to your frontend domain(s) before launch
+    allow_origins=["https://po-excel-assistance.vercel.app/"],  # tighten this to your frontend domain(s) before launch
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
