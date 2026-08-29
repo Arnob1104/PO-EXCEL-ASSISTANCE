@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Manifest — PO Assistant</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --bg:#11141a;
+    --surface:#1a1f28;
+    --surface-2:#212733;
+    --line:#2c3341;
+    --ink:#eae7df;
+    --ink-dim:#9aa1b0;
+    --amber:#d68c3e;
+    --amber-dim:#8c5f2c;
+    --ok:#6b9b6e;
+    --err:#c4574a;
+    --mono:'IBM Plex Mono', monospace;
+    --sans:'IBM Plex Sans', sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:var(--sans); min-height:100vh;
+  }
+  ::selection{ background:var(--amber-dim); color:#fff; }
+
+  /* --- header --- */
+  header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:18px 28px; border-bottom:1px solid var(--line);
+    background:var(--surface);
+  }
+  .brand{ display:flex; align-items:baseline; gap:10px; }
+  .brand .mark{
+    font-family:var(--mono); font-weight:600; font-size:13px;
+    color:var(--amber); letter-spacing:0.14em; border:1px solid var(--amber-dim);
+    padding:3px 7px; border-radius:3px;
+  }
+  .brand h1{ font-size:17px; font-weight:600; margin:0; letter-spacing:0.01em; }
+  .brand .sub{ font-family:var(--mono); font-size:11px; color:var(--ink-dim); }
+  #user-chip{ font-family:var(--mono); font-size:12px; color:var(--ink-dim); display:none; align-items:center; gap:12px; }
+  #user-chip button{ all:unset; cursor:pointer; color:var(--err); font-family:var(--mono); font-size:11px; }
+
+  /* --- layout --- */
+  main{ display:none; max-width:1100px; margin:0 auto; padding:28px; gap:22px; grid-template-columns: 300px 1fr; }
+  main.active{ display:grid; }
+  @media (max-width: 800px){ main{ grid-template-columns: 1fr; } }
+
+  .panel{
+    background:var(--surface); border:1px solid var(--line); border-radius:6px;
+    padding:18px;
+  }
+  .panel h2{
+    font-family:var(--mono); font-size:11px; letter-spacing:0.12em; text-transform:uppercase;
+    color:var(--ink-dim); margin:0 0 14px 0; display:flex; align-items:center; gap:8px;
+  }
+  .panel h2::before{ content:''; width:6px; height:6px; background:var(--amber); border-radius:50%; }
+
+  /* --- upload panel --- */
+  .drop{
+    border:1px dashed var(--line); border-radius:5px; padding:20px 14px; text-align:center;
+    color:var(--ink-dim); font-size:13px; cursor:pointer; transition:border-color .15s;
+  }
+  .drop:hover{ border-color:var(--amber-dim); }
+  .drop input{ display:none; }
+  #upload-status{ font-family:var(--mono); font-size:11px; margin-top:12px; color:var(--ink-dim); min-height:16px; }
+  .cols{ margin-top:16px; font-family:var(--mono); font-size:10.5px; color:var(--ink-dim); line-height:1.6; }
+  .cols b{ color:var(--ink); }
+
+  /* --- chat panel --- */
+  #chat-panel{ display:flex; flex-direction:column; height:70vh; }
+  #log{ flex:1; overflow-y:auto; padding-right:4px; display:flex; flex-direction:column; gap:14px; }
+  .msg{ max-width:82%; }
+  .msg.user{ align-self:flex-end; text-align:right; }
+  .msg .tag{ font-family:var(--mono); font-size:10px; letter-spacing:0.1em; color:var(--ink-dim); margin-bottom:4px; }
+  .msg .bubble{
+    display:inline-block; text-align:left; padding:10px 13px; border-radius:5px; font-size:14px; line-height:1.5;
+    white-space:pre-wrap;
+  }
+  .msg.user .bubble{ background:var(--amber-dim); color:#fff; }
+  .msg.assistant .bubble{ background:var(--surface-2); border:1px solid var(--line); }
+  .msg.assistant.pending .bubble{ color:var(--ink-dim); font-style:italic; }
+
+  #composer{ display:flex; gap:8px; margin-top:16px; border-top:1px solid var(--line); padding-top:16px; }
+  #composer input{
+    flex:1; background:var(--surface-2); border:1px solid var(--line); color:var(--ink);
+    padding:11px 13px; border-radius:5px; font-family:var(--sans); font-size:14px;
+  }
+  #composer input:focus{ outline:none; border-color:var(--amber-dim); }
+  #composer button{
+    background:var(--amber); color:#1a1206; border:none; font-weight:600; font-size:13px;
+    padding:0 20px; border-radius:5px; cursor:pointer;
+  }
+  #composer button:disabled{ opacity:.5; cursor:default; }
+
+  /* --- login screen --- */
+  #login-screen{
+    max-width:360px; margin:80px auto; padding:0 20px; display:block;
+  }
+  #login-screen .panel{ padding:28px; }
+  #login-screen h2{ margin-bottom:18px; }
+  #login-screen input{
+    width:100%; background:var(--surface-2); border:1px solid var(--line); color:var(--ink);
+    padding:11px 13px; border-radius:5px; font-family:var(--sans); font-size:14px; margin-bottom:10px;
+  }
+  #login-screen input:focus{ outline:none; border-color:var(--amber-dim); }
+  #login-screen button{
+    width:100%; background:var(--amber); color:#1a1206; border:none; font-weight:600; font-size:14px;
+    padding:11px; border-radius:5px; cursor:pointer; margin-top:6px;
+  }
+  #login-error{ color:var(--err); font-family:var(--mono); font-size:12px; margin-top:10px; min-height:14px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <span class="mark">PO·01</span>
+    <div>
+      <h1>Manifest</h1>
+      <div class="sub">purchase order assistant</div>
+    </div>
+  </div>
+  <div id="user-chip">
+    <span id="user-email"></span>
+    <button id="logout-btn">sign out</button>
+  </div>
+</header>
+
+<section id="login-screen">
+  <div class="panel">
+    <h2>Sign in</h2>
+    <input id="email" type="email" placeholder="you@company.com" />
+    <input id="password" type="password" placeholder="password" />
+    <button id="login-btn">Sign in</button>
+    <div id="login-error"></div>
+  </div>
+</section>
+
+<main id="app">
+  <div class="panel">
+    <h2>Order data</h2>
+    <label class="drop" id="drop">
+      <input type="file" id="file-input" accept=".xlsx,.xls" />
+      Click to select a .xlsx file<br/>with your purchase orders
+    </label>
+    <div id="upload-status"></div>
+    <div class="cols">
+      Required columns:<br/>
+      <b>order_ref</b>, <b>buyer</b>, <b>style</b>,<br/>
+      <b>order_qty</b>, <b>ship_date</b>, <b>status</b>
+    </div>
+  </div>
+
+  <div class="panel" id="chat-panel">
+    <h2>Ask about your orders</h2>
+    <div id="log"></div>
+    <div id="composer">
+      <input id="question" type="text" placeholder="e.g. Which orders ship this week?" />
+      <button id="ask-btn">Ask</button>
+    </div>
+  </div>
+</main>
+
+<script>
+  // ---- Configure these two for your deployment ----
+  const SUPABASE_URL = "https://akzjrlqjgzqvrksqjgus.supabase.co";
+  const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_FjAXLXHAwEI2yIt4WWgmCQ_yR0zd_m_";
+  const API_BASE = "http://localhost:8000";
+  // ---------------------------------------------------
+
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+
+  const loginScreen = document.getElementById('login-screen');
+  const app = document.getElementById('app');
+  const userChip = document.getElementById('user-chip');
+  const userEmail = document.getElementById('user-email');
+  const loginError = document.getElementById('login-error');
+  const log = document.getElementById('log');
+
+  let session = null;
+
+  async function init() {
+    const { data } = await sb.auth.getSession();
+    session = data.session;
+    render();
+  }
+
+  function render() {
+    if (session) {
+      loginScreen.style.display = 'none';
+      app.classList.add('active');
+      userChip.style.display = 'flex';
+      userEmail.textContent = session.user.email;
+    } else {
+      loginScreen.style.display = 'block';
+      app.classList.remove('active');
+      userChip.style.display = 'none';
+    }
+  }
+
+  document.getElementById('login-btn').addEventListener('click', async () => {
+    loginError.textContent = '';
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) { loginError.textContent = error.message; return; }
+    session = data.session;
+    render();
+  });
+
+  document.getElementById('logout-btn').addEventListener('click', async () => {
+    await sb.auth.signOut();
+    session = null;
+    render();
+  });
+
+  // --- file upload ---
+  const fileInput = document.getElementById('file-input');
+  const uploadStatus = document.getElementById('upload-status');
+
+  fileInput.addEventListener('change', async () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+    uploadStatus.textContent = 'Uploading…';
+    uploadStatus.style.color = 'var(--ink-dim)';
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const res = await fetch(`${API_BASE}/po/upload`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${session.access_token}` },
+        body: formData
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.detail || 'Upload failed');
+      uploadStatus.textContent = `Loaded ${body.inserted} rows.`;
+      uploadStatus.style.color = 'var(--ok)';
+    } catch (err) {
+      uploadStatus.textContent = err.message;
+      uploadStatus.style.color = 'var(--err)';
+    }
+  });
+
+  // --- chat ---
+  function addMessage(role, text, pending = false) {
+    const wrap = document.createElement('div');
+    wrap.className = `msg ${role}${pending ? ' pending' : ''}`;
+    wrap.innerHTML = `<div class="tag">${role === 'user' ? 'you' : 'manifest'}</div><div class="bubble">${text}</div>`;
+    log.appendChild(wrap);
+    log.scrollTop = log.scrollHeight;
+    return wrap;
+  }
+
+  async function ask() {
+    const input = document.getElementById('question');
+    const question = input.value.trim();
+    if (!question) return;
+    input.value = '';
+    addMessage('user', question);
+    const pendingEl = addMessage('assistant', 'thinking…', true);
+
+    try {
+      const res = await fetch(`${API_BASE}/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ question })
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.detail || 'Request failed');
+      pendingEl.classList.remove('pending');
+      pendingEl.querySelector('.bubble').textContent = body.answer;
+    } catch (err) {
+      pendingEl.classList.remove('pending');
+      pendingEl.querySelector('.bubble').textContent = `Error: ${err.message}`;
+      pendingEl.querySelector('.bubble').style.color = 'var(--err)';
+    }
+  }
+
+  document.getElementById('ask-btn').addEventListener('click', ask);
+  document.getElementById('question').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') ask();
+  });
+
+  init();
+</script>
+</body>
+</html>
